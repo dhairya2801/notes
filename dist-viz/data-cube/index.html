@@ -1,0 +1,985 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OLAP Data Cube — Interactive Visualizer</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0d1117; --surface: #161b22; --surface2: #1c2129;
+      --border: #30363d; --text: #e6edf3; --text2: #8b949e;
+      --accent: #58a6ff; --accent-dim: #1f3a5f;
+      --danger: #f85149; --success: #3fb950; --warn: #f0883e;
+      --purple: #a29bfe; --pink: #fd79a8; --teal: #4ecdc4;
+      --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --mono: 'SF Mono', 'Fira Code', Consolas, monospace;
+    }
+    html { font-size: 14px; }
+    body {
+      font-family: var(--font); background: var(--bg); color: var(--text);
+      height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+      user-select: none;
+    }
+
+    /* Header */
+    header {
+      padding: 0.8rem 1.5rem; border-bottom: 1px solid var(--border);
+      background: var(--surface); flex-shrink: 0;
+      display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap;
+    }
+    .header-text h1 { font-size: 1.3rem; font-weight: 600; }
+    .header-text h1 span { color: var(--accent); }
+    .header-text .subtitle { color: var(--text2); font-size: 0.82rem; }
+    .explain-toggle {
+      background: none; border: 1px solid var(--border); color: var(--accent);
+      padding: 0.25rem 0.6rem; border-radius: 4px; cursor: pointer; font-size: 0.78rem;
+      font-family: var(--font);
+    }
+    .explain-toggle:hover { background: var(--accent-dim); }
+
+    .explanation {
+      display: none; padding: 1rem 1.5rem; background: var(--surface2);
+      border-bottom: 1px solid var(--border); line-height: 1.7;
+      font-size: 0.85rem; color: var(--text2); flex-shrink: 0;
+    }
+    .explanation.open { display: block; }
+    .explanation h3 { color: var(--text); margin: 0.6rem 0 0.2rem; font-size: 0.92rem; }
+    .explanation h3:first-child { margin-top: 0; }
+    .explanation code {
+      background: var(--bg); padding: 0.1em 0.35em; border-radius: 3px;
+      font-family: var(--mono); font-size: 0.85em; color: var(--accent);
+    }
+    .explanation .cols { display: flex; gap: 2rem; flex-wrap: wrap; }
+    .explanation .cols > div { flex: 1; min-width: 250px; }
+
+    /* Main */
+    .main { flex: 1; display: flex; min-height: 0; }
+
+    /* Sidebar */
+    .sidebar {
+      width: 280px; flex-shrink: 0; background: var(--surface);
+      border-right: 1px solid var(--border); overflow-y: auto; padding: 0.8rem;
+      display: flex; flex-direction: column; gap: 0.8rem;
+    }
+    .panel {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 6px; padding: 0.7rem;
+    }
+    .panel-title {
+      font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--text2); margin-bottom: 0.5rem; font-weight: 600;
+    }
+
+    select, button {
+      font-family: var(--font); font-size: 0.82rem;
+    }
+    select {
+      background: var(--bg); border: 1px solid var(--border); color: var(--text);
+      padding: 0.35rem 0.5rem; border-radius: 4px; width: 100%;
+    }
+    select:focus { outline: none; border-color: var(--accent); }
+    button {
+      background: var(--accent-dim); border: 1px solid var(--accent); color: var(--accent);
+      padding: 0.35rem 0.7rem; border-radius: 4px; cursor: pointer;
+      transition: background 0.15s;
+    }
+    button:hover { background: #264a78; }
+    button.active { background: var(--accent); color: #0d1117; font-weight: 600; }
+
+    .dim-label { font-size: 0.78rem; color: var(--text2); margin-bottom: 0.25rem; margin-top: 0.4rem; }
+    .dim-label:first-child { margin-top: 0; }
+    .dim-label b { color: var(--text); }
+
+    /* Operation buttons */
+    .op-group { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.4rem; }
+    .op-group button { font-size: 0.76rem; padding: 0.3rem 0.55rem; }
+    .op-group button.active-op { background: var(--purple); color: #fff; border-color: var(--purple); }
+
+    /* Slice controls */
+    .slice-row {
+      display: flex; align-items: center; gap: 0.4rem; margin-top: 0.3rem;
+    }
+    .slice-row label { font-size: 0.78rem; color: var(--text2); min-width: 3.5rem; }
+    .slice-row select { flex: 1; }
+    .slice-row .slice-badge {
+      font-size: 0.7rem; padding: 0.15rem 0.4rem; border-radius: 3px;
+      background: var(--purple); color: #fff; font-weight: 600;
+    }
+
+    /* Metric selector */
+    .metric-btns { display: flex; gap: 0.3rem; flex-wrap: wrap; }
+    .metric-btns button { font-size: 0.75rem; padding: 0.25rem 0.5rem; }
+    .metric-btns button.active { background: var(--teal); color: #0d1117; border-color: var(--teal); }
+
+    /* Color legend */
+    .legend { display: flex; align-items: center; gap: 0.3rem; margin-top: 0.5rem; font-size: 0.75rem; }
+    .legend-bar {
+      width: 120px; height: 10px; border-radius: 3px;
+      background: linear-gradient(90deg, #0d2137, #1a4a7a, #58a6ff, #f9ca24, #ff6b6b);
+    }
+    .legend span { color: var(--text2); }
+
+    /* Canvas */
+    .canvas-wrap {
+      flex: 1; position: relative; cursor: grab;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .canvas-wrap:active { cursor: grabbing; }
+    canvas { display: block; }
+
+    /* Tooltip */
+    .tooltip {
+      position: fixed; background: var(--surface2); border: 1px solid var(--border);
+      padding: 0.6rem 0.8rem; border-radius: 5px; font-size: 0.8rem;
+      pointer-events: none; z-index: 100; display: none;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.5); max-width: 280px;
+    }
+    .tooltip .tt-title { font-weight: 600; margin-bottom: 0.2rem; color: var(--accent); }
+    .tooltip .tt-row { color: var(--text2); font-size: 0.76rem; line-height: 1.5; }
+    .tooltip .tt-row b { color: var(--text); }
+    .tooltip .tt-val { font-family: var(--mono); color: var(--teal); font-size: 0.85rem; font-weight: 600; }
+
+    /* Detail panel */
+    .detail-overlay {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.6); z-index: 200; display: none;
+      align-items: center; justify-content: center;
+    }
+    .detail-overlay.open { display: flex; }
+    .detail-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+      padding: 1.5rem; max-width: 450px; width: 90%;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+    }
+    .detail-card h2 { font-size: 1.1rem; margin-bottom: 0.8rem; color: var(--accent); }
+    .detail-card .detail-grid {
+      display: grid; grid-template-columns: auto 1fr; gap: 0.3rem 1rem;
+      font-size: 0.85rem;
+    }
+    .detail-card .detail-grid .dlabel { color: var(--text2); }
+    .detail-card .detail-grid .dval { font-family: var(--mono); color: var(--text); }
+    .detail-card .detail-grid .dval.highlight { color: var(--teal); font-weight: 600; font-size: 1rem; }
+    .detail-card .close-btn {
+      margin-top: 1rem; background: var(--surface2); border-color: var(--border);
+      color: var(--text2); width: 100%;
+    }
+    .detail-card .close-btn:hover { background: var(--bg); }
+
+    .detail-card .drilldown { margin-top: 1rem; }
+    .detail-card .drilldown h3 { font-size: 0.85rem; color: var(--text2); margin-bottom: 0.4rem; }
+    .detail-card .drill-table {
+      width: 100%; border-collapse: collapse; font-size: 0.78rem;
+    }
+    .detail-card .drill-table th {
+      text-align: left; padding: 0.3rem 0.5rem; border-bottom: 1px solid var(--border);
+      color: var(--text2); font-weight: 600;
+    }
+    .detail-card .drill-table td {
+      padding: 0.3rem 0.5rem; border-bottom: 1px solid var(--surface2);
+      font-family: var(--mono);
+    }
+
+    /* Hint text */
+    .hint {
+      position: absolute; bottom: 1rem; left: 50%; transform: translateX(-50%);
+      color: var(--text2); font-size: 0.75rem; opacity: 0.6;
+      pointer-events: none; text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-text">
+    <h1><span>OLAP Data Cube</span> — Interactive Visualizer</h1>
+    <div class="subtitle">Explore multidimensional aggregation with drill-down, slice, dice, and roll-up operations</div>
+  </div>
+  <button class="explain-toggle" onclick="toggleExplain()">Learn more</button>
+</header>
+
+<div class="explanation" id="explanation">
+  <div class="cols">
+    <div>
+      <h3>What is a Data Cube?</h3>
+      In OLAP (Online Analytical Processing), data is modeled as a multidimensional cube. Each axis
+      represents a <b>dimension</b> (e.g., Product, Region, Time), and each cell holds an <b>aggregate measure</b>
+      (e.g., total revenue, average quantity). This enables fast, flexible analytical queries across any
+      combination of dimensions.
+
+      <h3>Cube Operations</h3>
+      <b>Slice</b> — fix one dimension to a single value, reducing the cube by one dimension (3D → 2D).<br>
+      <b>Dice</b> — filter on multiple dimensions simultaneously, selecting a sub-cube.<br>
+      <b>Roll-up</b> — aggregate to a coarser level, collapsing a dimension (e.g., months → year).<br>
+      <b>Drill-down</b> — expand to a finer level (e.g., year → months). Click any cell to drill down.
+    </div>
+    <div>
+      <h3>Why Cubes? (from DDIA)</h3>
+      Star and snowflake schemas in data warehouses store denormalized facts with dimension tables.
+      Data cubes (materialized aggregates) pre-compute summaries across dimension combinations,
+      making common analytical queries near-instant. The trade-off is flexibility — pre-computed cubes
+      can't answer arbitrary queries, so most warehouses keep the raw data alongside cubes.
+
+      <h3>This Visualization</h3>
+      The cube below represents a sample retail dataset with 3 dimensions: <b>Product</b> (X-axis),
+      <b>Region</b> (Y-axis), and <b>Quarter</b> (Z-axis). Each cell's size and color encode the
+      selected metric. Drag to rotate, scroll to zoom, hover for values, click for details.
+    </div>
+  </div>
+</div>
+
+<div class="main">
+  <aside class="sidebar">
+    <div class="panel">
+      <div class="panel-title">Metric</div>
+      <div class="metric-btns" id="metricBtns">
+        <button class="active" data-metric="revenue">Revenue</button>
+        <button data-metric="quantity">Quantity</button>
+        <button data-metric="profit">Profit</button>
+        <button data-metric="orders">Orders</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Dimensions</div>
+      <div class="dim-label"><b style="color:#ff6b6b">X-axis</b> — Product</div>
+      <div class="dim-label"><b style="color:#4ecdc4">Y-axis</b> — Region</div>
+      <div class="dim-label"><b style="color:#a29bfe">Z-axis</b> — Quarter</div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Slice (fix a dimension)</div>
+      <div class="slice-row">
+        <label><b style="color:#ff6b6b">Product</b></label>
+        <select id="sliceProduct" onchange="cube.applyFilters()">
+          <option value="all">All</option>
+        </select>
+      </div>
+      <div class="slice-row">
+        <label><b style="color:#4ecdc4">Region</b></label>
+        <select id="sliceRegion" onchange="cube.applyFilters()">
+          <option value="all">All</option>
+        </select>
+      </div>
+      <div class="slice-row">
+        <label><b style="color:#a29bfe">Quarter</b></label>
+        <select id="sliceQuarter" onchange="cube.applyFilters()">
+          <option value="all">All</option>
+        </select>
+      </div>
+      <div style="margin-top:0.5rem">
+        <button onclick="cube.resetFilters()" style="width:100%;font-size:0.78rem">Reset All Slices</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Roll-Up / Drill-Down</div>
+      <div class="op-group">
+        <button id="rollupBtn" onclick="cube.toggleRollup()">Roll-Up (aggregate all)</button>
+      </div>
+      <div style="font-size:0.72rem;color:var(--text2);margin-top:0.3rem">
+        Roll-up collapses all values per dimension into a single total. Click a cell to drill down into its raw data.
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Display</div>
+      <div style="display:flex;gap:0.3rem;flex-wrap:wrap">
+        <button id="toggleLabels" onclick="cube.toggleLabels()" class="active" style="font-size:0.76rem">Labels</button>
+        <button id="toggleValues" onclick="cube.toggleValues()" class="active" style="font-size:0.76rem">Values</button>
+        <button id="toggleAxes" onclick="cube.toggleAxes()" class="active" style="font-size:0.76rem">Axes</button>
+        <button id="toggleAutoRotate" onclick="cube.toggleAutoRotate()" style="font-size:0.76rem">Auto-Rotate</button>
+      </div>
+      <div class="legend">
+        <span>Low</span>
+        <div class="legend-bar"></div>
+        <span>High</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Presets</div>
+      <div style="display:flex;gap:0.3rem;flex-wrap:wrap">
+        <button onclick="cube.preset('front')" style="font-size:0.76rem">Front</button>
+        <button onclick="cube.preset('top')" style="font-size:0.76rem">Top</button>
+        <button onclick="cube.preset('side')" style="font-size:0.76rem">Side</button>
+        <button onclick="cube.preset('iso')" style="font-size:0.76rem">Isometric</button>
+      </div>
+    </div>
+  </aside>
+
+  <div class="canvas-wrap" id="canvasWrap">
+    <canvas id="cubeCanvas"></canvas>
+    <div class="hint">Drag to rotate · Scroll to zoom · Hover for values · Click for details</div>
+  </div>
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<div class="detail-overlay" id="detailOverlay" onclick="if(event.target===this)cube.closeDetail()">
+  <div class="detail-card" id="detailCard"></div>
+</div>
+
+<script>
+// =========================================================
+// Sample Data — Retail Dataset
+// =========================================================
+const PRODUCTS = ['Laptops', 'Phones', 'Tablets', 'Watches', 'Headphones'];
+const REGIONS  = ['North', 'South', 'East', 'West'];
+const QUARTERS = ['Q1 2024', 'Q2 2024', 'Q3 2024'];
+
+// Raw fact rows: one per (product, region, quarter)
+const RAW_DATA = [];
+const rng = (() => { let s = 42; return () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; }; })();
+
+for (const p of PRODUCTS) {
+  for (const r of REGIONS) {
+    for (const q of QUARTERS) {
+      const base = (PRODUCTS.indexOf(p) + 1) * 1000 + (REGIONS.indexOf(r) + 1) * 500;
+      const qmult = 0.8 + QUARTERS.indexOf(q) * 0.15;
+      const revenue  = Math.round(base * qmult * (0.7 + rng() * 0.6));
+      const quantity = Math.round(revenue / (80 + rng() * 120));
+      const profit   = Math.round(revenue * (0.15 + rng() * 0.25));
+      const orders   = Math.round(quantity * (0.3 + rng() * 0.7));
+      // Generate some fake individual orders for drill-down
+      const details = [];
+      for (let i = 0; i < Math.min(orders, 8); i++) {
+        details.push({
+          id: `ORD-${Math.floor(rng() * 90000 + 10000)}`,
+          amount: Math.round(revenue / orders * (0.6 + rng() * 0.8)),
+          date: `2024-${String((QUARTERS.indexOf(q)) * 3 + 1 + Math.floor(rng() * 3)).padStart(2, '0')}-${String(Math.floor(rng() * 28) + 1).padStart(2, '0')}`,
+        });
+      }
+      RAW_DATA.push({ product: p, region: r, quarter: q, revenue, quantity, profit, orders, details });
+    }
+  }
+}
+
+// =========================================================
+// 3D Math Helpers
+// =========================================================
+function rotateY(p, a) {
+  const c = Math.cos(a), s = Math.sin(a);
+  return [p[0]*c + p[2]*s, p[1], -p[0]*s + p[2]*c];
+}
+function rotateX(p, a) {
+  const c = Math.cos(a), s = Math.sin(a);
+  return [p[0], p[1]*c - p[2]*s, p[1]*s + p[2]*c];
+}
+function project(p, cx, cy, scale, dist) {
+  const z = p[2] + dist;
+  const f = dist / Math.max(z, 0.1);
+  return [cx + p[0] * scale * f, cy - p[1] * scale * f, z];
+}
+
+// =========================================================
+// Color
+// =========================================================
+function valueToColor(t) {
+  // 0=cool blue, 0.5=bright blue, 0.75=yellow, 1=red
+  t = Math.max(0, Math.min(1, t));
+  const stops = [
+    [0, 13, 33, 55],
+    [0.25, 26, 74, 122],
+    [0.5, 88, 166, 255],
+    [0.75, 249, 202, 36],
+    [1, 255, 107, 107],
+  ];
+  let lo = stops[0], hi = stops[stops.length - 1];
+  for (let i = 0; i < stops.length - 1; i++) {
+    if (t >= stops[i][0] && t <= stops[i + 1][0]) {
+      lo = stops[i]; hi = stops[i + 1]; break;
+    }
+  }
+  const f = (t - lo[0]) / (hi[0] - lo[0] || 1);
+  const r = Math.round(lo[1] + (hi[1] - lo[1]) * f);
+  const g = Math.round(lo[2] + (hi[2] - lo[2]) * f);
+  const b = Math.round(lo[3] + (hi[3] - lo[3]) * f);
+  return `rgb(${r},${g},${b})`;
+}
+
+function valueToAlpha(t) {
+  return 0.4 + t * 0.55;
+}
+
+// =========================================================
+// Data Cube Visualizer
+// =========================================================
+class DataCubeViz {
+  constructor() {
+    this.canvas = document.getElementById('cubeCanvas');
+    this.ctx = this.canvas.getContext('2d');
+    this.wrap = document.getElementById('canvasWrap');
+
+    // State
+    this.rotX = -0.45;
+    this.rotY = 0.65;
+    this.zoom = 1;
+    this.metric = 'revenue';
+    this.showLabels = true;
+    this.showValues = true;
+    this.showAxes = true;
+    this.autoRotate = false;
+    this.rolledUp = false;
+
+    this.sliceProduct = 'all';
+    this.sliceRegion = 'all';
+    this.sliceQuarter = 'all';
+
+    this.hoverCell = null;
+    this.cells = []; // rendered cells for hit testing
+    this.animTarget = null;
+
+    this._setupControls();
+    this._populateSelects();
+    this._resize();
+    window.addEventListener('resize', () => this._resize());
+    this._animate();
+  }
+
+  _resize() {
+    const r = this.wrap.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    this.canvas.width = r.width * dpr;
+    this.canvas.height = r.height * dpr;
+    this.canvas.style.width = r.width + 'px';
+    this.canvas.style.height = r.height + 'px';
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this.w = r.width;
+    this.h = r.height;
+  }
+
+  _populateSelects() {
+    const sp = document.getElementById('sliceProduct');
+    for (const p of PRODUCTS) sp.innerHTML += `<option value="${p}">${p}</option>`;
+    const sr = document.getElementById('sliceRegion');
+    for (const r of REGIONS) sr.innerHTML += `<option value="${r}">${r}</option>`;
+    const sq = document.getElementById('sliceQuarter');
+    for (const q of QUARTERS) sq.innerHTML += `<option value="${q}">${q}</option>`;
+  }
+
+  _setupControls() {
+    let dragging = false, lastX, lastY;
+
+    this.canvas.addEventListener('mousedown', (e) => {
+      dragging = true; lastX = e.clientX; lastY = e.clientY;
+      this.autoRotate = false;
+      document.getElementById('toggleAutoRotate').classList.remove('active');
+    });
+    window.addEventListener('mousemove', (e) => {
+      if (dragging) {
+        this.rotY += (e.clientX - lastX) * 0.008;
+        this.rotX += (e.clientY - lastY) * 0.008;
+        this.rotX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.rotX));
+        lastX = e.clientX; lastY = e.clientY;
+      }
+    });
+    window.addEventListener('mouseup', () => { dragging = false; });
+
+    // Touch support
+    this.canvas.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 1) {
+        dragging = true;
+        lastX = e.touches[0].clientX;
+        lastY = e.touches[0].clientY;
+        this.autoRotate = false;
+        document.getElementById('toggleAutoRotate').classList.remove('active');
+      }
+    }, { passive: true });
+    window.addEventListener('touchmove', (e) => {
+      if (dragging && e.touches.length === 1) {
+        this.rotY += (e.touches[0].clientX - lastX) * 0.008;
+        this.rotX += (e.touches[0].clientY - lastY) * 0.008;
+        this.rotX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.rotX));
+        lastX = e.touches[0].clientX;
+        lastY = e.touches[0].clientY;
+      }
+    }, { passive: true });
+    window.addEventListener('touchend', () => { dragging = false; });
+
+    this.canvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      this.zoom *= e.deltaY > 0 ? 0.93 : 1.07;
+      this.zoom = Math.max(0.4, Math.min(3, this.zoom));
+    }, { passive: false });
+
+    // Hover
+    this.canvas.addEventListener('mousemove', (e) => {
+      if (dragging) { hideTooltip(); return; }
+      const rect = this.canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      this.hoverCell = this._hitTest(mx, my);
+      if (this.hoverCell) {
+        this._showTooltip(e.clientX, e.clientY, this.hoverCell);
+      } else {
+        hideTooltip();
+      }
+    });
+    this.canvas.addEventListener('mouseleave', () => { this.hoverCell = null; hideTooltip(); });
+
+    // Click
+    this.canvas.addEventListener('click', (e) => {
+      const rect = this.canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      const cell = this._hitTest(mx, my);
+      if (cell) this._showDetail(cell);
+    });
+
+    // Metric buttons
+    document.getElementById('metricBtns').addEventListener('click', (e) => {
+      if (e.target.dataset.metric) {
+        this.metric = e.target.dataset.metric;
+        document.querySelectorAll('#metricBtns button').forEach(b => b.classList.remove('active'));
+        e.target.classList.add('active');
+      }
+    });
+  }
+
+  applyFilters() {
+    this.sliceProduct = document.getElementById('sliceProduct').value;
+    this.sliceRegion = document.getElementById('sliceRegion').value;
+    this.sliceQuarter = document.getElementById('sliceQuarter').value;
+  }
+
+  resetFilters() {
+    document.getElementById('sliceProduct').value = 'all';
+    document.getElementById('sliceRegion').value = 'all';
+    document.getElementById('sliceQuarter').value = 'all';
+    this.sliceProduct = 'all';
+    this.sliceRegion = 'all';
+    this.sliceQuarter = 'all';
+  }
+
+  toggleRollup() {
+    this.rolledUp = !this.rolledUp;
+    document.getElementById('rollupBtn').classList.toggle('active-op', this.rolledUp);
+  }
+
+  toggleLabels() {
+    this.showLabels = !this.showLabels;
+    document.getElementById('toggleLabels').classList.toggle('active', this.showLabels);
+  }
+  toggleValues() {
+    this.showValues = !this.showValues;
+    document.getElementById('toggleValues').classList.toggle('active', this.showValues);
+  }
+  toggleAxes() {
+    this.showAxes = !this.showAxes;
+    document.getElementById('toggleAxes').classList.toggle('active', this.showAxes);
+  }
+  toggleAutoRotate() {
+    this.autoRotate = !this.autoRotate;
+    document.getElementById('toggleAutoRotate').classList.toggle('active', this.autoRotate);
+  }
+
+  preset(view) {
+    this.autoRotate = false;
+    document.getElementById('toggleAutoRotate').classList.remove('active');
+    if (view === 'front') { this.animTarget = { rotX: 0, rotY: 0 }; }
+    else if (view === 'top') { this.animTarget = { rotX: -Math.PI/2, rotY: 0 }; }
+    else if (view === 'side') { this.animTarget = { rotX: 0, rotY: Math.PI/2 }; }
+    else if (view === 'iso') { this.animTarget = { rotX: -0.45, rotY: 0.65 }; }
+  }
+
+  _getFilteredData() {
+    let data = RAW_DATA;
+    if (this.sliceProduct !== 'all') data = data.filter(d => d.product === this.sliceProduct);
+    if (this.sliceRegion !== 'all') data = data.filter(d => d.region === this.sliceRegion);
+    if (this.sliceQuarter !== 'all') data = data.filter(d => d.quarter === this.sliceQuarter);
+    return data;
+  }
+
+  _getCubeData() {
+    const data = this._getFilteredData();
+    const products = this.sliceProduct !== 'all' ? [this.sliceProduct] : PRODUCTS;
+    const regions = this.sliceRegion !== 'all' ? [this.sliceRegion] : REGIONS;
+    const quarters = this.sliceQuarter !== 'all' ? [this.sliceQuarter] : QUARTERS;
+
+    if (this.rolledUp) {
+      // Single aggregated cell
+      const total = data.reduce((acc, d) => acc + d[this.metric], 0);
+      return {
+        products: ['All Products'], regions: ['All Regions'], quarters: ['All Quarters'],
+        cells: [{ pi: 0, ri: 0, qi: 0, value: total, data: data,
+                  product: 'All', region: 'All', quarter: 'All' }],
+        min: total, max: total,
+      };
+    }
+
+    const cells = [];
+    let min = Infinity, max = -Infinity;
+
+    for (let pi = 0; pi < products.length; pi++) {
+      for (let ri = 0; ri < regions.length; ri++) {
+        for (let qi = 0; qi < quarters.length; qi++) {
+          const matches = data.filter(d =>
+            d.product === products[pi] && d.region === regions[ri] && d.quarter === quarters[qi]);
+          if (matches.length === 0) continue;
+          const value = matches.reduce((s, d) => s + d[this.metric], 0);
+          min = Math.min(min, value);
+          max = Math.max(max, value);
+          cells.push({
+            pi, ri, qi, value, data: matches,
+            product: products[pi], region: regions[ri], quarter: quarters[qi],
+          });
+        }
+      }
+    }
+
+    return { products, regions, quarters, cells, min, max };
+  }
+
+  _animate() {
+    if (this.autoRotate) {
+      this.rotY += 0.005;
+    }
+    if (this.animTarget) {
+      const t = 0.08;
+      this.rotX += (this.animTarget.rotX - this.rotX) * t;
+      this.rotY += (this.animTarget.rotY - this.rotY) * t;
+      if (Math.abs(this.rotX - this.animTarget.rotX) < 0.001 &&
+          Math.abs(this.rotY - this.animTarget.rotY) < 0.001) {
+        this.rotX = this.animTarget.rotX;
+        this.rotY = this.animTarget.rotY;
+        this.animTarget = null;
+      }
+    }
+    this._render();
+    requestAnimationFrame(() => this._animate());
+  }
+
+  _render() {
+    const ctx = this.ctx;
+    const W = this.w, H = this.h;
+    ctx.clearRect(0, 0, W, H);
+
+    const cx = W / 2, cy = H / 2;
+    const baseScale = Math.min(W, H) * 0.28 * this.zoom;
+    const dist = 6;
+
+    const cubeData = this._getCubeData();
+    const { products, regions, quarters, cells, min, max } = cubeData;
+    const nx = products.length, ny = regions.length, nz = quarters.length;
+
+    // Cell spacing
+    const spacing = 1.1;
+    const cellSize = 0.8 / Math.max(nx, ny, nz, 1);
+
+    // Transform a grid coord (0..n-1) to 3D centered
+    const toPos = (pi, ri, qi) => {
+      const x = (pi - (nx - 1) / 2) * spacing;
+      const y = (ri - (ny - 1) / 2) * spacing;
+      const z = (qi - (nz - 1) / 2) * spacing;
+      return [x, y, z];
+    };
+
+    // 3D transform
+    const xform = (p) => {
+      let r = rotateX(p, this.rotX);
+      r = rotateY(r, this.rotY);
+      return project(r, cx, cy, baseScale, dist);
+    };
+
+    // Draw axes
+    if (this.showAxes) {
+      const axisLen = Math.max(nx, ny, nz) * spacing * 0.6 + 0.5;
+      const axes = [
+        { dir: [axisLen, 0, 0], color: '#ff6b6b', label: 'Product' },
+        { dir: [0, axisLen, 0], color: '#4ecdc4', label: 'Region' },
+        { dir: [0, 0, axisLen], color: '#a29bfe', label: 'Quarter' },
+      ];
+      const origin = xform([0, 0, 0]);
+      for (const a of axes) {
+        const end = xform(a.dir);
+        ctx.beginPath();
+        ctx.moveTo(origin[0], origin[1]);
+        ctx.lineTo(end[0], end[1]);
+        ctx.strokeStyle = a.color;
+        ctx.globalAlpha = 0.35;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+
+        if (this.showLabels) {
+          const lp = xform(a.dir.map(v => v * 1.15));
+          ctx.font = '11px -apple-system, sans-serif';
+          ctx.fillStyle = a.color;
+          ctx.textAlign = 'center';
+          ctx.globalAlpha = 0.7;
+          ctx.fillText(a.label, lp[0], lp[1]);
+          ctx.globalAlpha = 1;
+        }
+      }
+    }
+
+    // Collect renderable cells with depth
+    const renderCells = [];
+    for (const cell of cells) {
+      const pos = toPos(cell.pi, cell.ri, cell.qi);
+      const proj = xform(pos);
+      const t = max > min ? (cell.value - min) / (max - min) : 0.5;
+      const size = (0.5 + t * 0.5) * cellSize * baseScale * (dist / proj[2]) * 0.85;
+      renderCells.push({ ...cell, pos, proj, t, size });
+    }
+
+    // Sort by depth (far first)
+    renderCells.sort((a, b) => b.proj[2] - a.proj[2]);
+
+    // Store for hit testing
+    this.cells = [];
+
+    for (const cell of renderCells) {
+      const [sx, sy] = cell.proj;
+      const size = cell.size;
+      const color = valueToColor(cell.t);
+      const alpha = valueToAlpha(cell.t);
+
+      const isHovered = this.hoverCell &&
+        this.hoverCell.product === cell.product &&
+        this.hoverCell.region === cell.region &&
+        this.hoverCell.quarter === cell.quarter;
+
+      // Draw cube faces for 3D effect
+      this._drawCell3D(ctx, sx, sy, size, color, alpha, isHovered, cell.pos);
+
+      // Value text
+      if (this.showValues && size > 18) {
+        ctx.font = `${Math.max(9, Math.min(13, size * 0.35))}px ${getComputedStyle(document.body).getPropertyValue('--mono')}`;
+        ctx.fillStyle = '#fff';
+        ctx.globalAlpha = isHovered ? 1 : 0.85;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const txt = this._fmtShort(cell.value);
+        ctx.fillText(txt, sx, sy);
+        ctx.globalAlpha = 1;
+      }
+
+      // Store for hit testing
+      this.cells.push({ x: sx, y: sy, size, ...cell });
+    }
+
+    // Axis tick labels
+    if (this.showLabels) {
+      ctx.font = '10px -apple-system, sans-serif';
+      ctx.globalAlpha = 0.6;
+
+      // Product labels along X
+      for (let i = 0; i < nx; i++) {
+        const p = xform(toPos(i, -0.6 - ny * 0.25, -(nz - 1) / 2));
+        ctx.fillStyle = '#ff6b6b';
+        ctx.textAlign = 'center';
+        ctx.fillText(products[i], p[0], p[1]);
+      }
+      // Region labels along Y
+      for (let i = 0; i < ny; i++) {
+        const p = xform(toPos(-(nx - 1) / 2 - 0.5, i, -(nz - 1) / 2 - 0.5));
+        ctx.fillStyle = '#4ecdc4';
+        ctx.textAlign = 'right';
+        ctx.fillText(regions[i], p[0], p[1]);
+      }
+      // Quarter labels along Z
+      for (let i = 0; i < nz; i++) {
+        const p = xform(toPos((nx - 1) / 2 + 0.7, -(ny - 1) / 2 - 0.5, i));
+        ctx.fillStyle = '#a29bfe';
+        ctx.textAlign = 'left';
+        ctx.fillText(quarters[i], p[0], p[1]);
+      }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  _drawCell3D(ctx, sx, sy, size, color, alpha, isHovered, pos3d) {
+    const s = size;
+    const depth = s * 0.3;
+
+    // Parse color for shading
+    const match = color.match(/rgb\((\d+),(\d+),(\d+)\)/);
+    const [r, g, b] = match ? [+match[1], +match[2], +match[3]] : [88, 166, 255];
+
+    const darker = (f) => `rgb(${Math.round(r*f)},${Math.round(g*f)},${Math.round(b*f)})`;
+
+    // Determine which faces are visible based on rotation
+    const showRight = Math.sin(this.rotY) > -0.3;
+    const showLeft = Math.sin(this.rotY) < 0.3;
+    const showTop = Math.sin(this.rotX) < 0.3;
+    const showBottom = Math.sin(this.rotX) > -0.3;
+
+    const baseAlpha = isHovered ? Math.min(1, alpha + 0.3) : alpha;
+
+    // Top face
+    if (showTop) {
+      ctx.beginPath();
+      ctx.moveTo(sx - s/2, sy - s/2);
+      ctx.lineTo(sx - s/2 + depth*0.5, sy - s/2 - depth*0.5);
+      ctx.lineTo(sx + s/2 + depth*0.5, sy - s/2 - depth*0.5);
+      ctx.lineTo(sx + s/2, sy - s/2);
+      ctx.closePath();
+      ctx.fillStyle = darker(0.85);
+      ctx.globalAlpha = baseAlpha;
+      ctx.fill();
+    }
+
+    // Right face
+    if (showRight) {
+      ctx.beginPath();
+      ctx.moveTo(sx + s/2, sy - s/2);
+      ctx.lineTo(sx + s/2 + depth*0.5, sy - s/2 - depth*0.5);
+      ctx.lineTo(sx + s/2 + depth*0.5, sy + s/2 - depth*0.5);
+      ctx.lineTo(sx + s/2, sy + s/2);
+      ctx.closePath();
+      ctx.fillStyle = darker(0.65);
+      ctx.globalAlpha = baseAlpha;
+      ctx.fill();
+    }
+
+    // Front face
+    ctx.beginPath();
+    ctx.rect(sx - s/2, sy - s/2, s, s);
+    ctx.fillStyle = color;
+    ctx.globalAlpha = baseAlpha;
+    ctx.fill();
+
+    // Border
+    ctx.strokeStyle = isHovered ? '#fff' : 'rgba(255,255,255,0.15)';
+    ctx.lineWidth = isHovered ? 2 : 0.5;
+    ctx.globalAlpha = isHovered ? 1 : 0.5;
+    ctx.stroke();
+
+    // Glow on hover
+    if (isHovered) {
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 20;
+      ctx.beginPath();
+      ctx.rect(sx - s/2, sy - s/2, s, s);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = 0.6;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
+
+    ctx.globalAlpha = 1;
+  }
+
+  _hitTest(mx, my) {
+    // Check from front to back (cells are sorted far-first, so reverse)
+    for (let i = this.cells.length - 1; i >= 0; i--) {
+      const c = this.cells[i];
+      const dx = mx - c.x, dy = my - c.y;
+      if (Math.abs(dx) < c.size / 2 && Math.abs(dy) < c.size / 2) {
+        return c;
+      }
+    }
+    return null;
+  }
+
+  _showTooltip(mx, my, cell) {
+    const fmt = this._fmtFull(cell.value);
+    const el = document.getElementById('tooltip');
+    el.innerHTML = `
+      <div class="tt-title">${cell.product} × ${cell.region} × ${cell.quarter}</div>
+      <div class="tt-row"><b>${this.metric.charAt(0).toUpperCase() + this.metric.slice(1)}:</b> <span class="tt-val">${fmt}</span></div>
+      <div class="tt-row">Click for drill-down details</div>
+    `;
+    el.style.display = 'block';
+    el.style.left = (mx + 14) + 'px';
+    el.style.top = (my - 10) + 'px';
+  }
+
+  _showDetail(cell) {
+    hideTooltip();
+    const overlay = document.getElementById('detailOverlay');
+    const card = document.getElementById('detailCard');
+
+    const d = cell.data[0] || {};
+    const allMetrics = cell.data.reduce((acc, row) => {
+      acc.revenue += row.revenue;
+      acc.quantity += row.quantity;
+      acc.profit += row.profit;
+      acc.orders += row.orders;
+      return acc;
+    }, { revenue: 0, quantity: 0, profit: 0, orders: 0 });
+
+    const profitMargin = allMetrics.revenue > 0
+      ? (allMetrics.profit / allMetrics.revenue * 100).toFixed(1)
+      : 0;
+
+    // Collect drill-down rows
+    const drillRows = cell.data.flatMap(d => d.details || []);
+
+    card.innerHTML = `
+      <h2>${cell.product} · ${cell.region} · ${cell.quarter}</h2>
+      <div class="detail-grid">
+        <span class="dlabel">Revenue</span>
+        <span class="dval ${this.metric === 'revenue' ? 'highlight' : ''}">${this._fmtFull(allMetrics.revenue)}</span>
+        <span class="dlabel">Quantity</span>
+        <span class="dval ${this.metric === 'quantity' ? 'highlight' : ''}">${allMetrics.quantity.toLocaleString()}</span>
+        <span class="dlabel">Profit</span>
+        <span class="dval ${this.metric === 'profit' ? 'highlight' : ''}">${this._fmtFull(allMetrics.profit)}</span>
+        <span class="dlabel">Orders</span>
+        <span class="dval ${this.metric === 'orders' ? 'highlight' : ''}">${allMetrics.orders.toLocaleString()}</span>
+        <span class="dlabel">Profit Margin</span>
+        <span class="dval">${profitMargin}%</span>
+        <span class="dlabel">Avg Order Value</span>
+        <span class="dval">$${allMetrics.orders > 0 ? (allMetrics.revenue / allMetrics.orders).toFixed(0) : 0}</span>
+      </div>
+      ${drillRows.length > 0 ? `
+        <div class="drilldown">
+          <h3>Drill-Down: Sample Orders</h3>
+          <table class="drill-table">
+            <tr><th>Order ID</th><th>Amount</th><th>Date</th></tr>
+            ${drillRows.slice(0, 8).map(r => `
+              <tr><td>${r.id}</td><td>$${r.amount.toLocaleString()}</td><td>${r.date}</td></tr>
+            `).join('')}
+          </table>
+        </div>
+      ` : ''}
+      <button class="close-btn" onclick="cube.closeDetail()">Close</button>
+    `;
+    overlay.classList.add('open');
+  }
+
+  closeDetail() {
+    document.getElementById('detailOverlay').classList.remove('open');
+  }
+
+  _fmtShort(v) {
+    if (this.metric === 'revenue' || this.metric === 'profit') {
+      if (v >= 1000) return '$' + (v / 1000).toFixed(1) + 'k';
+      return '$' + v;
+    }
+    if (v >= 1000) return (v / 1000).toFixed(1) + 'k';
+    return String(v);
+  }
+
+  _fmtFull(v) {
+    if (this.metric === 'revenue' || this.metric === 'profit') {
+      return '$' + v.toLocaleString();
+    }
+    return v.toLocaleString();
+  }
+}
+
+// =========================================================
+// Helpers
+// =========================================================
+function hideTooltip() {
+  document.getElementById('tooltip').style.display = 'none';
+}
+
+function toggleExplain() {
+  const el = document.getElementById('explanation');
+  el.classList.toggle('open');
+  document.querySelector('.explain-toggle').textContent =
+    el.classList.contains('open') ? 'Hide' : 'Learn more';
+}
+
+// =========================================================
+// Init
+// =========================================================
+const cube = new DataCubeViz();
+</script>
+</body>
+</html>
