@@ -10,15 +10,18 @@
   />
   <style>
     :root {
-      --bg-a: #e7eef2;
-      --bg-b: #f6efe6;
-      --panel: rgba(255, 255, 255, 0.88);
-      --panel-strong: rgba(255, 255, 255, 0.96);
-      --ink: #17232f;
-      --muted: #587082;
-      --line: #c7d4de;
-      --accent: #d46a1f;
-      --accent-dark: #9e4a16;
+      --bg-1: #0d1320;
+      --bg-2: #161d2b;
+      --panel: rgba(16, 22, 35, 0.72);
+      --panel-strong: rgba(18, 25, 39, 0.86);
+      --line: rgba(255, 255, 255, 0.1);
+      --text: #f4f7fb;
+      --muted: #a5b0c4;
+      --accent: #5ab2ff;
+      --accent-soft: rgba(90, 178, 255, 0.18);
+      --accent-2: #ecc263;
+      --accent-2-soft: rgba(236, 194, 99, 0.16);
+      --shadow: rgba(0, 0, 0, 0.36);
     }
 
     html,
@@ -33,76 +36,151 @@
     body {
       margin: 0;
       min-height: 100vh;
-      font-family: "IBM Plex Sans", "Trebuchet MS", sans-serif;
-      color: var(--ink);
+      font-family: "Avenir Next", "Segoe UI", sans-serif;
+      color: var(--text);
       overflow: hidden;
       background:
-        radial-gradient(circle at top left, rgba(255, 255, 255, 0.75), transparent 34%),
-        linear-gradient(135deg, var(--bg-a), var(--bg-b));
+        radial-gradient(circle at 15% 20%, var(--accent-soft), transparent 18%),
+        radial-gradient(circle at 82% 18%, var(--accent-2-soft), transparent 16%),
+        radial-gradient(circle at 70% 82%, rgba(126, 86, 184, 0.14), transparent 18%),
+        linear-gradient(135deg, var(--bg-1), var(--bg-2));
+      overflow-x: hidden;
+    }
+
+    body::before,
+    body::after {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    body::before {
+      background:
+        radial-gradient(circle at 12% 24%, rgba(255, 255, 255, 0.24) 0 1px, transparent 1.2px),
+        radial-gradient(circle at 32% 62%, rgba(255, 255, 255, 0.18) 0 1px, transparent 1.2px),
+        radial-gradient(circle at 74% 34%, rgba(255, 255, 255, 0.2) 0 1px, transparent 1.2px),
+        radial-gradient(circle at 88% 72%, rgba(255, 255, 255, 0.18) 0 1px, transparent 1.2px),
+        radial-gradient(circle at 60% 88%, rgba(255, 255, 255, 0.16) 0 1px, transparent 1.2px);
+      opacity: 0.65;
+      background-size: 360px 360px;
+      animation: drift 20s linear infinite;
+    }
+
+    body::after {
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0));
+      mix-blend-mode: screen;
+    }
+
+    @keyframes drift {
+      from {
+        transform: translate3d(0, 0, 0);
+      }
+
+      to {
+        transform: translate3d(-24px, 18px, 0);
+      }
     }
 
     .app {
-      height: 100vh;
-      min-height: 100vh;
+      position: relative;
+      z-index: 1;
+      width: min(1240px, calc(100% - 32px));
+      height: calc(100vh - 48px);
+      min-height: calc(100vh - 48px);
+      margin: 24px auto;
+      padding: 28px;
+      border-radius: 32px;
+      background: linear-gradient(180deg, rgba(20, 27, 42, 0.72), rgba(13, 18, 29, 0.78));
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 24px 60px var(--shadow);
+      backdrop-filter: blur(18px);
       display: grid;
       grid-template-columns: minmax(0, 3fr) minmax(320px, 1fr);
+      gap: 22px;
     }
 
     .canvas-pane {
-      padding: 18px;
+      padding: 0;
       display: flex;
       flex-direction: column;
-      gap: 14px;
+      gap: 0;
       min-height: 0;
     }
 
     .canvas-card,
     .info-pane {
-      border: 1px solid rgba(79, 104, 122, 0.2);
-      backdrop-filter: blur(10px);
-      box-shadow: 0 18px 40px rgba(34, 55, 77, 0.08);
+      position: relative;
+      overflow: hidden;
+      border-radius: 28px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.2);
     }
 
     .canvas-card {
-      background: var(--panel);
-      border-radius: 22px;
-      overflow: hidden;
       display: flex;
       flex-direction: column;
-      height: calc(100vh - 36px);
+      height: 100%;
       min-height: 0;
     }
 
     .canvas-header {
-      padding: 16px 20px 12px;
-      border-bottom: 1px solid rgba(79, 104, 122, 0.14);
+      padding: 18px 22px 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
       display: flex;
       justify-content: space-between;
       align-items: flex-end;
       gap: 16px;
       background:
-        linear-gradient(135deg, rgba(255, 255, 255, 0.84), rgba(235, 243, 248, 0.86));
+        radial-gradient(circle at top right, rgba(255, 255, 255, 0.08), transparent 24%),
+        linear-gradient(160deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02)),
+        var(--panel);
     }
 
     .canvas-title {
       margin: 0;
-      font-size: 1.45rem;
+      font-size: 1.55rem;
       line-height: 1.1;
       letter-spacing: 0.02em;
+      color: var(--text);
     }
 
     .canvas-subtitle {
       margin: 6px 0 0;
       color: var(--muted);
       font-size: 0.95rem;
+      max-width: 52ch;
+    }
+
+    .canvas-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .header-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 16px;
+      padding: 10px 14px;
+      text-decoration: none;
+      font-weight: 600;
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
     }
 
     .canvas-badge {
-      padding: 8px 12px;
+      padding: 10px 14px;
       border-radius: 999px;
-      background: rgba(212, 106, 31, 0.12);
-      color: var(--accent-dark);
-      font-size: 0.82rem;
+      background: var(--accent-soft);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--accent-2);
+      font-size: 0.8rem;
       font-weight: 700;
       white-space: nowrap;
     }
@@ -111,17 +189,19 @@
       flex: 1 1 auto;
       min-height: 0;
       background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(235, 241, 245, 0.45)),
-        linear-gradient(90deg, rgba(90, 117, 137, 0.05) 1px, transparent 1px),
-        linear-gradient(rgba(90, 117, 137, 0.05) 1px, transparent 1px);
-      background-size: auto, 48px 48px, 48px 48px;
+        radial-gradient(circle at 16% 18%, rgba(90, 178, 255, 0.08), transparent 18%),
+        radial-gradient(circle at 84% 78%, rgba(236, 194, 99, 0.08), transparent 22%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(246, 249, 253, 0.98)),
+        linear-gradient(90deg, rgba(162, 177, 205, 0.08) 1px, transparent 1px),
+        linear-gradient(rgba(162, 177, 205, 0.08) 1px, transparent 1px);
+      background-size: auto, auto, auto, 48px 48px, 48px 48px;
     }
 
     .info-pane {
       background: var(--panel-strong);
-      border-left: 1px solid rgba(79, 104, 122, 0.22);
+      border-left: 1px solid rgba(255, 255, 255, 0.08);
       padding: 22px 20px 28px;
-      height: 100vh;
+      height: 100%;
       overflow-y: auto;
     }
 
@@ -130,7 +210,7 @@
       text-transform: uppercase;
       letter-spacing: 0.12em;
       font-size: 0.73rem;
-      color: var(--accent-dark);
+      color: var(--accent-2);
       font-weight: 800;
     }
 
@@ -138,6 +218,7 @@
       margin: 0;
       font-size: 1.5rem;
       line-height: 1.1;
+      color: var(--text);
     }
 
     .info-lead {
@@ -149,7 +230,7 @@
     .section {
       margin-top: 18px;
       padding-top: 16px;
-      border-top: 1px solid rgba(79, 104, 122, 0.14);
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
     }
 
     .section h3 {
@@ -157,7 +238,7 @@
       font-size: 0.9rem;
       text-transform: uppercase;
       letter-spacing: 0.08em;
-      color: #355065;
+      color: var(--accent);
     }
 
     .stats {
@@ -169,15 +250,15 @@
     .stat-card {
       padding: 12px 10px;
       border-radius: 14px;
-      background: #f4f7fa;
-      border: 1px solid rgba(79, 104, 122, 0.14);
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
       text-align: center;
     }
 
     .stat-card strong {
       display: block;
       font-size: 1.1rem;
-      color: #183042;
+      color: var(--accent-2);
     }
 
     .stat-card span {
@@ -203,9 +284,9 @@
       gap: 8px;
       padding: 8px 10px;
       border-radius: 999px;
-      background: #f3f6f8;
-      border: 1px solid rgba(79, 104, 122, 0.14);
-      color: #294257;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: #dce6f5;
       font-size: 0.88rem;
       line-height: 1.2;
     }
@@ -225,8 +306,9 @@
       gap: 8px;
       padding: 7px 10px;
       border-radius: 999px;
-      background: rgba(24, 48, 66, 0.08);
-      color: #284257;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03));
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: #dce6f5;
       font-size: 0.85rem;
       font-weight: 700;
     }
@@ -235,8 +317,10 @@
       margin-top: 18px;
       padding: 16px;
       border-radius: 18px;
-      background: linear-gradient(180deg, #f9fbfc, #eef4f8);
-      border: 1px solid rgba(79, 104, 122, 0.14);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.03)),
+        rgba(8, 12, 20, 0.24);
+      border: 1px solid rgba(255, 255, 255, 0.08);
     }
 
     .relationship-card p {
@@ -251,6 +335,11 @@
       }
 
       .app {
+        width: min(100% - 20px, 1240px);
+        height: auto;
+        min-height: 0;
+        margin: 10px auto;
+        padding: 18px;
         height: auto;
         grid-template-columns: 1fr;
       }
@@ -267,7 +356,11 @@
       .info-pane {
         height: auto;
         border-left: 0;
-        border-top: 1px solid rgba(79, 104, 122, 0.22);
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .canvas-actions {
+        justify-content: flex-start;
       }
     }
   </style>
@@ -283,7 +376,10 @@
               Drag nodes, zoom the map, and click any node or arrow for details.
             </p>
           </div>
-          <div class="canvas-badge">Vis Network</div>
+          <div class="canvas-actions">
+            <a class="header-link" href="index.html">Back to Wiki</a>
+            <div class="canvas-badge">Vis Network</div>
+          </div>
         </div>
         <div id="network"></div>
       </section>
@@ -1186,11 +1282,11 @@
         },
         font: {
           color: "#10212d",
-          face: "IBM Plex Sans, Trebuchet MS, sans-serif",
+          face: "Avenir Next, Segoe UI, sans-serif",
           size: 16,
           bold: {
             color: "#10212d",
-            face: "IBM Plex Sans, Trebuchet MS, sans-serif",
+            face: "Avenir Next, Segoe UI, sans-serif",
             size: 16
           }
         },
