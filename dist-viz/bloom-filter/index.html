@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bloom Filter — Interactive Visualizer</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface2: #1c2129;
+      --border: #30363d;
+      --text: #e6edf3;
+      --text2: #8b949e;
+      --accent: #58a6ff;
+      --accent-dim: #1f3a5f;
+      --danger: #f85149;
+      --success: #3fb950;
+      --warn: #f0883e;
+      --purple: #a29bfe;
+      --bit-off: #21262d;
+      --bit-on: #58a6ff;
+      --bit-check-hit: #3fb950;
+      --bit-check-miss: #f85149;
+      --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
+      --mono: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+    }
+
+    html { font-size: 14px; }
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Header */
+    header {
+      padding: 1.2rem 2rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    header h1 { font-size: 1.5rem; font-weight: 600; margin-bottom: 0.3rem; }
+    header h1 span { color: var(--accent); }
+    .subtitle { color: var(--text2); font-size: 0.9rem; line-height: 1.5; max-width: 80ch; }
+
+    .explain-toggle {
+      background: none; border: 1px solid var(--border); color: var(--accent);
+      padding: 0.3rem 0.7rem; border-radius: 4px; cursor: pointer; font-size: 0.8rem;
+      margin-top: 0.5rem; font-family: var(--font);
+    }
+    .explain-toggle:hover { background: var(--accent-dim); }
+    .explanation {
+      display: none; margin-top: 0.8rem; padding: 1rem; background: var(--surface2);
+      border-radius: 6px; border: 1px solid var(--border); line-height: 1.7;
+      font-size: 0.88rem; color: var(--text2); max-width: 100ch;
+    }
+    .explanation.open { display: block; }
+    .explanation h3 { color: var(--text); margin: 0.8rem 0 0.3rem; font-size: 0.95rem; }
+    .explanation h3:first-child { margin-top: 0; }
+    .explanation code {
+      background: var(--bg); padding: 0.15em 0.4em; border-radius: 3px;
+      font-family: var(--mono); font-size: 0.85em; color: var(--accent);
+    }
+
+    /* Main Layout */
+    .main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      grid-template-rows: 1fr auto;
+      min-height: 0;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      grid-row: 1 / 3;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      padding: 1rem;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .panel {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.8rem;
+    }
+    .panel-title {
+      font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--text2); margin-bottom: 0.6rem; font-weight: 600;
+    }
+
+    input[type="text"], input[type="number"] {
+      background: var(--bg); border: 1px solid var(--border); color: var(--text);
+      padding: 0.4rem 0.6rem; border-radius: 4px; font-size: 0.85rem;
+      font-family: var(--font); width: 100%;
+    }
+    input:focus { outline: none; border-color: var(--accent); }
+
+    button {
+      background: var(--accent-dim); border: 1px solid var(--accent); color: var(--accent);
+      padding: 0.4rem 0.8rem; border-radius: 4px; cursor: pointer; font-size: 0.82rem;
+      font-family: var(--font); transition: background 0.15s;
+    }
+    button:hover { background: #264a78; }
+    button.danger { border-color: var(--danger); color: var(--danger); background: #3d1214; }
+    button.danger:hover { background: #5c1a1d; }
+    button.success { border-color: var(--success); color: var(--success); background: #0f2d16; }
+    button.success:hover { background: #1a4425; }
+    button.purple { border-color: var(--purple); color: var(--purple); background: #1e1a3a; }
+    button.purple:hover { background: #2d2654; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .form-row { display: flex; gap: 0.4rem; margin-bottom: 0.5rem; }
+    .form-row input { flex: 1; }
+    .form-row button { flex-shrink: 0; }
+
+    /* Slider rows */
+    .slider-row { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.4rem; }
+    .slider-row label { font-size: 0.82rem; color: var(--text2); min-width: 5rem; }
+    .slider-row input[type="range"] { flex: 1; accent-color: var(--accent); background: transparent; }
+    .slider-val {
+      font-family: var(--mono); font-size: 0.85rem; min-width: 3ch;
+      text-align: right; color: var(--accent);
+    }
+
+    /* Stats */
+    .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; }
+    .stats-grid.three { grid-template-columns: 1fr 1fr 1fr; }
+    .stat-box { background: var(--bg); border-radius: 4px; padding: 0.5rem; text-align: center; }
+    .stat-val { font-family: var(--mono); font-size: 1.05rem; color: var(--accent); }
+    .stat-val.warn { color: var(--warn); }
+    .stat-val.danger { color: var(--danger); }
+    .stat-label { font-size: 0.7rem; color: var(--text2); margin-top: 0.15rem; }
+
+    /* Element list */
+    .elem-list {
+      max-height: 140px; overflow-y: auto; margin-top: 0.5rem;
+      display: flex; flex-wrap: wrap; gap: 0.3rem;
+    }
+    .elem-tag {
+      background: var(--bg); border: 1px solid var(--border); border-radius: 3px;
+      padding: 0.15rem 0.5rem; font-size: 0.78rem; font-family: var(--mono);
+      color: var(--accent);
+    }
+
+    /* Viz area */
+    .viz-area {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: var(--bg);
+    }
+
+    /* Bit array visualization */
+    .bit-array-section {
+      flex: 1;
+      padding: 1.5rem;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .bit-array-label {
+      font-size: 0.8rem; color: var(--text2); margin-bottom: 0.8rem;
+      text-align: center;
+    }
+    .bit-array-label b { color: var(--text); }
+
+    .bit-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 3px;
+      justify-content: center;
+      max-width: 900px;
+    }
+    .bit-cell {
+      width: 28px; height: 28px; border-radius: 4px;
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--mono); font-size: 0.7rem;
+      transition: background 0.3s, transform 0.2s, box-shadow 0.3s;
+      cursor: default; position: relative;
+      border: 1px solid transparent;
+    }
+    .bit-cell.off {
+      background: var(--bit-off); color: #484f58;
+    }
+    .bit-cell.on {
+      background: var(--bit-on); color: #fff; font-weight: 600;
+      box-shadow: 0 0 8px rgba(88,166,255,0.3);
+    }
+    .bit-cell.highlight-add {
+      transform: scale(1.25);
+      box-shadow: 0 0 14px rgba(88,166,255,0.7);
+      z-index: 2;
+    }
+    .bit-cell.check-hit {
+      background: var(--bit-check-hit); color: #fff;
+      box-shadow: 0 0 12px rgba(63,185,80,0.5);
+      transform: scale(1.2);
+      z-index: 2;
+    }
+    .bit-cell.check-miss {
+      background: var(--bit-check-miss); color: #fff;
+      box-shadow: 0 0 12px rgba(248,81,73,0.5);
+      transform: scale(1.2);
+      border: 2px solid var(--danger);
+      z-index: 2;
+    }
+    .bit-cell .bit-idx {
+      position: absolute; top: -14px; left: 50%; transform: translateX(-50%);
+      font-size: 0.55rem; color: var(--text2); opacity: 0;
+      transition: opacity 0.2s; white-space: nowrap;
+    }
+    .bit-cell:hover .bit-idx { opacity: 1; }
+
+    /* Hash function visualization */
+    .hash-viz {
+      margin-top: 1rem;
+      padding: 1rem 1.5rem;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      min-height: 70px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .hash-viz.hidden { display: none; }
+    .hash-step {
+      display: flex; flex-direction: column; align-items: center; gap: 0.2rem;
+    }
+    .hash-step .step-label { font-size: 0.65rem; color: var(--text2); text-transform: uppercase; letter-spacing: 0.05em; }
+    .hash-step .step-val {
+      font-family: var(--mono); font-size: 0.9rem; padding: 0.3rem 0.7rem;
+      border-radius: 4px; background: var(--bg); border: 1px solid var(--border);
+    }
+    .hash-arrow { color: var(--text2); font-size: 1.2rem; margin-top: 0.8rem; }
+    .hash-step .step-val.accent { color: var(--accent); border-color: var(--accent); }
+    .hash-step .step-val.success { color: var(--success); border-color: var(--success); }
+    .hash-step .step-val.danger { color: var(--danger); border-color: var(--danger); }
+
+    /* False positive meter */
+    .fp-meter {
+      margin-top: 0.6rem; background: var(--bg); border-radius: 4px;
+      padding: 0.6rem; font-size: 0.8rem;
+    }
+    .fp-bar-track {
+      height: 8px; background: var(--surface2); border-radius: 4px;
+      overflow: hidden; margin-top: 0.3rem;
+    }
+    .fp-bar-fill {
+      height: 100%; border-radius: 4px; transition: width 0.4s, background 0.4s;
+    }
+    .fp-label { display: flex; justify-content: space-between; color: var(--text2); font-size: 0.75rem; margin-top: 0.2rem; }
+
+    /* Event log */
+    .log-container {
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      max-height: 180px;
+      overflow-y: auto;
+      padding: 0.5rem 1rem;
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      line-height: 1.6;
+    }
+    .log-entry { color: var(--text2); }
+    .log-entry .log-time { color: var(--text2); opacity: 0.5; }
+    .log-entry .c-add { color: var(--success); }
+    .log-entry .c-check { color: var(--purple); }
+    .log-entry .c-hit { color: var(--success); }
+    .log-entry .c-miss { color: var(--danger); }
+    .log-entry .c-fp { color: var(--warn); }
+    .log-entry .c-info { color: var(--accent); }
+    .log-entry .c-reset { color: var(--danger); }
+
+    /* Toast */
+    .toast {
+      position: fixed; top: 1.5rem; right: 1.5rem;
+      background: var(--surface2); border: 1px solid var(--border); border-radius: 6px;
+      padding: 0.8rem 1.2rem; font-size: 0.88rem;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+      z-index: 100; transform: translateY(-10px); opacity: 0;
+      transition: all 0.3s ease; max-width: 380px;
+    }
+    .toast.show { transform: translateY(0); opacity: 1; }
+    .toast .toast-title { font-weight: 600; margin-bottom: 0.25rem; }
+    .toast .t-yes { color: var(--success); }
+    .toast .t-no { color: var(--danger); }
+    .toast .t-fp { color: var(--warn); font-size: 0.8rem; margin-top: 0.2rem; }
+    .toast .t-detail { color: var(--text2); font-family: var(--mono); font-size: 0.8rem; margin-top: 0.15rem; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1><span>Bloom Filter</span> — Interactive Visualizer</h1>
+  <p class="subtitle">
+    A space-efficient probabilistic data structure for set membership testing.
+    Add elements, check membership, and watch how false positives emerge as the filter fills up.
+  </p>
+  <button class="explain-toggle" onclick="toggleExplain()">Learn more about Bloom filters</button>
+  <div class="explanation" id="explanation">
+    <h3>What is a Bloom Filter?</h3>
+    A Bloom filter is a compact data structure that answers "is this element in the set?" It can say
+    <b>"definitely not"</b> or <b>"probably yes"</b> — but never gives a false negative.
+    It uses a bit array plus multiple hash functions, trading a small false positive rate for extreme space efficiency.
+
+    <h3>How It Works</h3>
+    The filter is a bit array of <code>m</code> bits, all initially 0. To <b>add</b> an element, compute
+    <code>k</code> independent hash functions, each producing a bit index (0 to m−1). Set all <code>k</code>
+    bits to 1. To <b>check</b> membership, compute the same <code>k</code> hashes. If <em>all</em>
+    <code>k</code> bits are 1, the element is "probably present." If <em>any</em> bit is 0, the element is
+    definitely not in the set.
+
+    <h3>False Positives</h3>
+    As more elements are added, more bits become 1, and the chance increases that an element <em>not</em>
+    in the set has all its <code>k</code> bits coincidentally set. The false positive probability is approximately:
+    <code>(1 − e^(−kn/m))^k</code>, where <code>n</code> is the number of inserted elements.
+    The optimal number of hash functions is <code>k = (m/n) × ln(2)</code>.
+
+    <h3>Key Properties</h3>
+    <b>No false negatives</b> — if the filter says "no," the element was definitely never added.<br>
+    <b>No deletion</b> — you can't remove elements (unsetting bits would break other elements). Counting Bloom filters address this.<br>
+    <b>Space efficient</b> — much smaller than storing the actual set. With 1% FP rate, you need ~9.6 bits per element.
+
+    <h3>Real-World Uses (from DDIA)</h3>
+    Databases use Bloom filters to avoid unnecessary disk reads — LSM-tree storage engines (like LevelDB, RocksDB, Cassandra)
+    check a Bloom filter before reading an SSTable, skipping the read entirely if the key is definitely absent.
+    Also used in CDNs, spell checkers, and network routers.
+  </div>
+</header>
+
+<div class="main">
+  <aside class="sidebar">
+    <!-- Config Panel -->
+    <div class="panel">
+      <div class="panel-title">Filter Configuration</div>
+      <div class="slider-row">
+        <label>Bits (m)</label>
+        <input type="range" id="bitsSlider" min="8" max="256" value="64" step="8" oninput="ui.resize(+this.value, undefined)">
+        <span class="slider-val" id="bitsVal">64</span>
+      </div>
+      <div class="slider-row">
+        <label>Hashes (k)</label>
+        <input type="range" id="hashSlider" min="1" max="10" value="3" oninput="ui.resize(undefined, +this.value)">
+        <span class="slider-val" id="hashVal">3</span>
+      </div>
+      <div style="font-size:0.73rem;color:var(--text2);margin-top:0.2rem">
+        Optimal k = (m/n) &times; ln(2). Try adjusting to see the effect on false positive rate.
+      </div>
+      <div style="margin-top:0.5rem">
+        <button class="danger" onclick="ui.reset()" style="width:100%;font-size:0.8rem">Reset Filter</button>
+      </div>
+    </div>
+
+    <!-- Add Panel -->
+    <div class="panel">
+      <div class="panel-title">Add Element</div>
+      <div class="form-row">
+        <input type="text" id="addInput" placeholder="Element to add" />
+        <button class="success" onclick="ui.add()">Add</button>
+      </div>
+      <div class="form-row">
+        <button onclick="ui.addRandom(10)" style="flex:1;font-size:0.78rem">+ 10 Random</button>
+        <button onclick="ui.addRandom(50)" style="flex:1;font-size:0.78rem">+ 50 Random</button>
+      </div>
+      <div class="elem-list" id="elemList"></div>
+    </div>
+
+    <!-- Check Panel -->
+    <div class="panel">
+      <div class="panel-title">Check Membership</div>
+      <div class="form-row">
+        <input type="text" id="checkInput" placeholder="Element to check" />
+        <button class="purple" onclick="ui.check()">Check</button>
+      </div>
+      <div class="form-row">
+        <button class="purple" onclick="ui.testFalsePositives()" style="flex:1;font-size:0.78rem">
+          Test 1000 Random Lookups
+        </button>
+      </div>
+    </div>
+
+    <!-- Stats Panel -->
+    <div class="panel">
+      <div class="panel-title">Statistics</div>
+      <div class="stats-grid three">
+        <div class="stat-box">
+          <div class="stat-val" id="statElems">0</div>
+          <div class="stat-label">Elements</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-val" id="statBitsSet">0</div>
+          <div class="stat-label">Bits Set</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-val" id="statFillPct">0%</div>
+          <div class="stat-label">Fill Rate</div>
+        </div>
+      </div>
+
+      <!-- FP meter -->
+      <div class="fp-meter">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span>False Positive Probability</span>
+          <b id="fpRate" style="font-family:var(--mono);color:var(--accent)">0%</b>
+        </div>
+        <div class="fp-bar-track">
+          <div class="fp-bar-fill" id="fpBar" style="width:0%;background:var(--success)"></div>
+        </div>
+        <div class="fp-label">
+          <span>0%</span>
+          <span>100%</span>
+        </div>
+      </div>
+
+      <div class="stats-grid" style="margin-top:0.5rem">
+        <div class="stat-box">
+          <div class="stat-val" id="statOptK">—</div>
+          <div class="stat-label">Optimal k</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-val" id="statBitsPerElem">—</div>
+          <div class="stat-label">Bits/Element</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <div class="viz-area">
+    <div class="bit-array-section" id="bitArraySection">
+      <div class="bit-array-label" id="bitLabel">
+        Bit array: <b>64</b> bits, <b>3</b> hash functions — add elements to see the filter in action
+      </div>
+      <div class="bit-grid" id="bitGrid"></div>
+    </div>
+    <div class="hash-viz hidden" id="hashViz"></div>
+  </div>
+
+  <div class="log-container" id="logContainer">
+    <div class="log-entry" style="color:var(--text2);opacity:0.5">Event log — operations will appear here...</div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// =========================================================
+// Hash Functions — multiple independent hashes via double hashing
+// Using MurmurHash3 with different seeds
+// =========================================================
+function murmurhash3(key, seed = 0) {
+  let h = seed >>> 0;
+  const len = key.length;
+  const nblocks = len >> 2;
+  const c1 = 0xcc9e2d51, c2 = 0x1b873593;
+
+  for (let i = 0; i < nblocks; i++) {
+    let k = (key.charCodeAt(i * 4) & 0xff) |
+            ((key.charCodeAt(i * 4 + 1) & 0xff) << 8) |
+            ((key.charCodeAt(i * 4 + 2) & 0xff) << 16) |
+            ((key.charCodeAt(i * 4 + 3) & 0xff) << 24);
+    k = Math.imul(k, c1);
+    k = (k << 15) | (k >>> 17);
+    k = Math.imul(k, c2);
+    h ^= k;
+    h = (h << 13) | (h >>> 19);
+    h = Math.imul(h, 5) + 0xe6546b64;
+  }
+
+  let k = 0;
+  const tail = nblocks * 4;
+  switch (len & 3) {
+    case 3: k ^= (key.charCodeAt(tail + 2) & 0xff) << 16;
+    case 2: k ^= (key.charCodeAt(tail + 1) & 0xff) << 8;
+    case 1: k ^= (key.charCodeAt(tail) & 0xff);
+            k = Math.imul(k, c1); k = (k << 15) | (k >>> 17);
+            k = Math.imul(k, c2); h ^= k;
+  }
+
+  h ^= len; h ^= h >>> 16;
+  h = Math.imul(h, 0x85ebca6b); h ^= h >>> 13;
+  h = Math.imul(h, 0xc2b2ae35); h ^= h >>> 16;
+  return h >>> 0;
+}
+
+// Generate k hash indices using enhanced double hashing
+function getHashIndices(element, k, m) {
+  const h1 = murmurhash3(element, 0);
+  const h2 = murmurhash3(element, 0x9747b28c);
+  const indices = [];
+  for (let i = 0; i < k; i++) {
+    // Kirsch-Mitzenmacker: h1 + i*h2 + i^2
+    const idx = ((h1 + Math.imul(i, h2) + i * i) >>> 0) % m;
+    indices.push(idx);
+  }
+  return indices;
+}
+
+// =========================================================
+// Bloom Filter
+// =========================================================
+class BloomFilter {
+  constructor(m = 64, k = 3) {
+    this.m = m;
+    this.k = k;
+    this.bits = new Uint8Array(m);
+    this.elements = new Set();
+    this.elementCount = 0;
+  }
+
+  add(element) {
+    const indices = getHashIndices(element, this.k, this.m);
+    const newBits = [];
+    for (const idx of indices) {
+      if (this.bits[idx] === 0) newBits.push(idx);
+      this.bits[idx] = 1;
+    }
+    this.elements.add(element);
+    this.elementCount = this.elements.size;
+    return { indices, newBits };
+  }
+
+  check(element) {
+    const indices = getHashIndices(element, this.k, this.m);
+    const bitValues = indices.map(i => this.bits[i]);
+    const allSet = bitValues.every(v => v === 1);
+    const isActualMember = this.elements.has(element);
+    const isFalsePositive = allSet && !isActualMember;
+    return { indices, bitValues, allSet, isActualMember, isFalsePositive };
+  }
+
+  bitsSet() {
+    let count = 0;
+    for (let i = 0; i < this.m; i++) if (this.bits[i]) count++;
+    return count;
+  }
+
+  fillRate() {
+    return this.bitsSet() / this.m;
+  }
+
+  // Theoretical false positive probability
+  fpProbability() {
+    const n = this.elementCount;
+    if (n === 0) return 0;
+    // (1 - e^(-kn/m))^k
+    return Math.pow(1 - Math.exp(-this.k * n / this.m), this.k);
+  }
+
+  optimalK() {
+    if (this.elementCount === 0) return this.k;
+    return Math.round((this.m / this.elementCount) * Math.LN2);
+  }
+
+  reset() {
+    this.bits = new Uint8Array(this.m);
+    this.elements.clear();
+    this.elementCount = 0;
+  }
+
+  resize(newM, newK) {
+    this.m = newM;
+    this.k = newK;
+    this.bits = new Uint8Array(newM);
+    // Re-insert all elements
+    const elems = [...this.elements];
+    this.elements.clear();
+    this.elementCount = 0;
+    for (const e of elems) this.add(e);
+    return elems;
+  }
+}
+
+// =========================================================
+// UI Rendering
+// =========================================================
+const HASH_COLORS = [
+  '#58a6ff', '#a29bfe', '#4ecdc4', '#f9ca24', '#ff6b6b',
+  '#fd79a8', '#00b894', '#e17055', '#74b9ff', '#55efc4',
+];
+
+class UIController {
+  constructor() {
+    this.bloom = new BloomFilter(64, 3);
+    this.logger = new EventLog(document.getElementById('logContainer'));
+    this.highlightTimer = null;
+    this.renderBitArray();
+    this.updateStats();
+  }
+
+  renderBitArray() {
+    const grid = document.getElementById('bitGrid');
+    grid.innerHTML = '';
+    for (let i = 0; i < this.bloom.m; i++) {
+      const cell = document.createElement('div');
+      cell.className = `bit-cell ${this.bloom.bits[i] ? 'on' : 'off'}`;
+      cell.textContent = this.bloom.bits[i] ? '1' : '0';
+      cell.id = `bit-${i}`;
+      const idx = document.createElement('span');
+      idx.className = 'bit-idx';
+      idx.textContent = i;
+      cell.appendChild(idx);
+      grid.appendChild(cell);
+    }
+    document.getElementById('bitLabel').innerHTML =
+      `Bit array: <b>${this.bloom.m}</b> bits, <b>${this.bloom.k}</b> hash functions` +
+      (this.bloom.elementCount > 0 ? ` — <b>${this.bloom.elementCount}</b> elements stored` : ' — add elements to see the filter in action');
+  }
+
+  updateBitCells() {
+    for (let i = 0; i < this.bloom.m; i++) {
+      const cell = document.getElementById(`bit-${i}`);
+      if (!cell) continue;
+      const isOn = this.bloom.bits[i] === 1;
+      cell.className = `bit-cell ${isOn ? 'on' : 'off'}`;
+      cell.firstChild.textContent = isOn ? '1' : '0';
+    }
+  }
+
+  highlightBits(indices, mode, duration = 1500) {
+    clearTimeout(this.highlightTimer);
+    // Clear previous highlights
+    document.querySelectorAll('.bit-cell.highlight-add, .bit-cell.check-hit, .bit-cell.check-miss')
+      .forEach(el => {
+        el.classList.remove('highlight-add', 'check-hit', 'check-miss');
+      });
+
+    for (const idx of indices) {
+      const cell = document.getElementById(`bit-${idx}`);
+      if (cell) cell.classList.add(mode);
+    }
+
+    this.highlightTimer = setTimeout(() => {
+      for (const idx of indices) {
+        const cell = document.getElementById(`bit-${idx}`);
+        if (cell) cell.classList.remove(mode);
+      }
+    }, duration);
+  }
+
+  showHashViz(element, indices, mode = 'add') {
+    const viz = document.getElementById('hashViz');
+    viz.classList.remove('hidden');
+    let html = `
+      <div class="hash-step">
+        <span class="step-label">Input</span>
+        <span class="step-val">"${this._esc(element)}"</span>
+      </div>
+      <span class="hash-arrow">→</span>
+    `;
+
+    for (let i = 0; i < indices.length; i++) {
+      const cls = mode === 'add' ? 'accent' :
+                  mode === 'hit' ? 'success' : 'danger';
+      html += `
+        <div class="hash-step">
+          <span class="step-label">h${i+1}</span>
+          <span class="step-val ${cls}">${indices[i]}</span>
+        </div>
+      `;
+      if (i < indices.length - 1) html += '<span class="hash-arrow">,</span>';
+    }
+
+    const label = mode === 'add' ? '→ SET bits' :
+                  mode === 'hit' ? '→ ALL bits = 1 ✓' : '→ MISS (bit = 0) ✗';
+    const labelCls = mode === 'add' ? 'accent' : mode === 'hit' ? 'success' : 'danger';
+    html += `
+      <span class="hash-arrow">→</span>
+      <div class="hash-step">
+        <span class="step-label">Result</span>
+        <span class="step-val ${labelCls}">${label}</span>
+      </div>
+    `;
+    viz.innerHTML = html;
+  }
+
+  add() {
+    const input = document.getElementById('addInput');
+    const element = input.value.trim();
+    if (!element) return;
+
+    if (this.bloom.elements.has(element)) {
+      this.logger.log(`<span class="c-info">"${this._esc(element)}" already in filter</span>`);
+      input.value = '';
+      return;
+    }
+
+    const result = this.bloom.add(element);
+    this.updateBitCells();
+    this.highlightBits(result.indices, 'highlight-add');
+    this.showHashViz(element, result.indices, 'add');
+
+    const bitsStr = result.indices.map(i => `<b>${i}</b>`).join(', ');
+    const newStr = result.newBits.length > 0
+      ? ` (${result.newBits.length} new bit${result.newBits.length > 1 ? 's' : ''} set)`
+      : ' (all bits already set)';
+    this.logger.log(`<span class="c-add">ADD</span> "${this._esc(element)}" → bits [${bitsStr}]${newStr}`);
+
+    input.value = '';
+    input.focus();
+    this.updateElemList();
+    this.updateStats();
+  }
+
+  addRandom(count) {
+    const words = ['alpha','bravo','charlie','delta','echo','foxtrot','golf','hotel',
+                   'india','juliet','kilo','lima','mike','november','oscar','papa',
+                   'quebec','romeo','sierra','tango','uniform','victor','whiskey',
+                   'xray','yankee','zulu','redis','kafka','postgres','nginx',
+                   'docker','linux','python','node','react','rust','elixir','golang'];
+    let added = 0;
+    for (let i = 0; i < count; i++) {
+      const word = words[Math.floor(Math.random() * words.length)];
+      const elem = `${word}:${Math.floor(Math.random() * 10000)}`;
+      if (!this.bloom.elements.has(elem)) {
+        this.bloom.add(elem);
+        added++;
+      }
+    }
+    this.updateBitCells();
+    this.logger.log(`<span class="c-add">ADD</span> ${added} random elements (${this.bloom.elementCount} total)`);
+    this.updateElemList();
+    this.updateStats();
+    document.getElementById('hashViz').classList.add('hidden');
+  }
+
+  check() {
+    const input = document.getElementById('checkInput');
+    const element = input.value.trim();
+    if (!element) return;
+
+    const result = this.bloom.check(element);
+    const mode = result.allSet ? 'check-hit' : 'check-miss';
+    this.highlightBits(result.indices, mode);
+
+    // Highlight the first 0 bit differently in miss case
+    if (!result.allSet) {
+      const missIdx = result.indices.filter((idx, i) => result.bitValues[i] === 0);
+      this.showHashViz(element, result.indices, 'miss');
+    } else {
+      this.showHashViz(element, result.indices, 'hit');
+    }
+
+    const bitsStr = result.indices.map((idx, i) => {
+      const val = result.bitValues[i];
+      const color = val ? 'var(--success)' : 'var(--danger)';
+      return `<b style="color:${color}">${idx}=${val}</b>`;
+    }).join(', ');
+
+    if (result.allSet) {
+      if (result.isFalsePositive) {
+        this.logger.log(`<span class="c-check">CHECK</span> "${this._esc(element)}" → bits [${bitsStr}] → <span class="c-fp">PROBABLY YES (FALSE POSITIVE — not actually in set!)</span>`);
+        showToast(`<div class="toast-title">Check: "${this._esc(element)}"</div>
+          <div class="t-yes">Probably in set (all bits = 1)</div>
+          <div class="t-fp">⚠ FALSE POSITIVE — this element was never actually added!</div>
+          <div class="t-detail">Bits: [${result.indices.join(', ')}]</div>`);
+      } else {
+        this.logger.log(`<span class="c-check">CHECK</span> "${this._esc(element)}" → bits [${bitsStr}] → <span class="c-hit">PROBABLY YES (true positive)</span>`);
+        showToast(`<div class="toast-title">Check: "${this._esc(element)}"</div>
+          <div class="t-yes">Probably in set (all bits = 1) ✓</div>
+          <div class="t-detail">Bits: [${result.indices.join(', ')}]</div>`);
+      }
+    } else {
+      this.logger.log(`<span class="c-check">CHECK</span> "${this._esc(element)}" → bits [${bitsStr}] → <span class="c-miss">DEFINITELY NOT in set</span>`);
+      showToast(`<div class="toast-title">Check: "${this._esc(element)}"</div>
+        <div class="t-no">Definitely NOT in set ✗</div>
+        <div class="t-detail">Bit(s) at [${result.indices.filter((_, i) => !result.bitValues[i]).join(', ')}] = 0</div>`);
+    }
+
+    input.value = '';
+    input.focus();
+  }
+
+  testFalsePositives() {
+    if (this.bloom.elementCount === 0) {
+      this.logger.log('<span class="c-miss">No elements in filter — add some first</span>');
+      return;
+    }
+
+    let falsePositives = 0;
+    let trueNegatives = 0;
+    const total = 1000;
+
+    for (let i = 0; i < total; i++) {
+      // Generate a random string unlikely to be in the set
+      const test = `__fp_test_${Math.random().toString(36).slice(2)}_${i}`;
+      const result = this.bloom.check(test);
+      if (result.allSet) falsePositives++;
+      else trueNegatives++;
+    }
+
+    const fpRate = (falsePositives / total * 100).toFixed(2);
+    const theoretical = (this.bloom.fpProbability() * 100).toFixed(2);
+
+    this.logger.log(
+      `<span class="c-info">FP TEST</span> Checked ${total} random non-members: ` +
+      `<span class="c-fp">${falsePositives} false positives (${fpRate}%)</span>, ` +
+      `${trueNegatives} true negatives — ` +
+      `theoretical: ${theoretical}%`
+    );
+
+    showToast(`<div class="toast-title">False Positive Test</div>
+      <div class="t-detail">${total} random lookups for non-members</div>
+      <div style="margin-top:0.3rem;font-size:0.9rem">
+        Measured FP rate: <b style="color:var(--warn)">${fpRate}%</b><br>
+        Theoretical FP rate: <b style="color:var(--accent)">${theoretical}%</b>
+      </div>`, 5000);
+
+    document.getElementById('hashViz').classList.add('hidden');
+  }
+
+  resize(newM, newK) {
+    const m = newM !== undefined ? newM : this.bloom.m;
+    const k = newK !== undefined ? newK : this.bloom.k;
+    document.getElementById('bitsVal').textContent = m;
+    document.getElementById('hashVal').textContent = k;
+    document.getElementById('bitsSlider').value = m;
+    document.getElementById('hashSlider').value = k;
+
+    const elems = this.bloom.resize(m, k);
+    this.logger.log(`<span class="c-info">RESIZE</span> m=${m} bits, k=${k} hashes — re-inserted ${elems.length} elements`);
+    this.renderBitArray();
+    this.updateElemList();
+    this.updateStats();
+    document.getElementById('hashViz').classList.add('hidden');
+  }
+
+  reset() {
+    this.bloom.reset();
+    this.logger.log('<span class="c-reset">RESET</span> Filter cleared');
+    this.renderBitArray();
+    this.updateElemList();
+    this.updateStats();
+    document.getElementById('hashViz').classList.add('hidden');
+  }
+
+  updateElemList() {
+    const list = document.getElementById('elemList');
+    const elems = [...this.bloom.elements];
+    if (elems.length === 0) {
+      list.innerHTML = '<span style="font-size:0.78rem;color:var(--text2)">No elements yet</span>';
+      return;
+    }
+    // Show last N elements to keep it manageable
+    const show = elems.slice(-30);
+    list.innerHTML = (elems.length > 30 ? '<span class="elem-tag" style="color:var(--text2)">…' + (elems.length - 30) + ' more</span>' : '') +
+      show.map(e => `<span class="elem-tag">${this._esc(e)}</span>`).join('');
+  }
+
+  updateStats() {
+    const bf = this.bloom;
+    document.getElementById('statElems').textContent = bf.elementCount;
+    document.getElementById('statBitsSet').textContent = bf.bitsSet();
+
+    const fill = bf.fillRate();
+    const fillEl = document.getElementById('statFillPct');
+    fillEl.textContent = (fill * 100).toFixed(1) + '%';
+    fillEl.className = 'stat-val' + (fill > 0.7 ? ' danger' : fill > 0.5 ? ' warn' : '');
+
+    const fp = bf.fpProbability();
+    const fpPct = (fp * 100).toFixed(2);
+    document.getElementById('fpRate').textContent = fpPct + '%';
+    document.getElementById('fpRate').style.color =
+      fp > 0.1 ? 'var(--danger)' : fp > 0.05 ? 'var(--warn)' : 'var(--accent)';
+
+    const bar = document.getElementById('fpBar');
+    bar.style.width = Math.min(fp * 100, 100) + '%';
+    bar.style.background = fp > 0.1 ? 'var(--danger)' : fp > 0.05 ? 'var(--warn)' : 'var(--success)';
+
+    const optK = bf.elementCount > 0 ? Math.max(1, Math.round((bf.m / bf.elementCount) * Math.LN2)) : '—';
+    document.getElementById('statOptK').textContent = optK;
+
+    const bpe = bf.elementCount > 0 ? (bf.m / bf.elementCount).toFixed(1) : '—';
+    document.getElementById('statBitsPerElem').textContent = bpe;
+  }
+
+  _esc(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+}
+
+// =========================================================
+// Event Log
+// =========================================================
+class EventLog {
+  constructor(container) { this.container = container; this.first = true; }
+  log(html) {
+    if (this.first) { this.container.innerHTML = ''; this.first = false; }
+    const now = new Date();
+    const time = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')}`;
+    const div = document.createElement('div');
+    div.className = 'log-entry';
+    div.innerHTML = `<span class="log-time">[${time}]</span> ${html}`;
+    this.container.appendChild(div);
+    this.container.scrollTop = this.container.scrollHeight;
+  }
+}
+
+// =========================================================
+// Toast
+// =========================================================
+let toastTimer;
+function showToast(html, duration = 3500) {
+  const el = document.getElementById('toast');
+  el.innerHTML = html;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), duration);
+}
+
+// =========================================================
+// Explanation toggle
+// =========================================================
+function toggleExplain() {
+  const el = document.getElementById('explanation');
+  el.classList.toggle('open');
+  document.querySelector('.explain-toggle').textContent =
+    el.classList.contains('open') ? 'Hide details' : 'Learn more about Bloom filters';
+}
+
+// =========================================================
+// Keyboard shortcuts
+// =========================================================
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    const active = document.activeElement;
+    if (active.id === 'addInput') ui.add();
+    else if (active.id === 'checkInput') ui.check();
+  }
+});
+
+// =========================================================
+// Init
+// =========================================================
+const ui = new UIController();
+
+// Add a few sample elements
+const samples = ['hello', 'world', 'bloom', 'filter', 'DDIA'];
+for (const s of samples) ui.bloom.add(s);
+ui.updateBitCells();
+ui.updateElemList();
+ui.updateStats();
+ui.logger.log(`<span class="c-add">Initialized with ${samples.length} sample elements: ${samples.join(', ')}</span>`);
+ui.logger.log('<span class="c-info">Try adding elements, checking membership, and adjusting the filter parameters!</span>');
+</script>
+</body>
+</html>
